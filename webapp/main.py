@@ -162,7 +162,7 @@ async def download_csv(job_id: str):
             )
         r = OutreachResult(
             prospect=Prospect(
-                name=f"{d['first_name']} {d['last_name']}".strip(),
+                name=d.get("name") or f"{d.get('first_name', '')} {d.get('last_name', '')}".strip(),
                 title=d["title"],
                 company=d["company"],
                 industry=d["industry"],
