@@ -7,7 +7,13 @@
 <div class="flex items-start justify-between mb-8 gap-4 flex-wrap">
   <div>
     <h1 class="text-2xl font-bold text-gray-900">Results</h1>
+    {% if job_status == 'queued' or job_status == 'running' %}
+    <p class="mt-1 text-gray-500">Working… {{ completed }} of {{ planned_total }} finished</p>
+    {% elif job_status == 'failed' %}
+    <p class="mt-1 text-gray-500">This run did not finish.</p>
+    {% else %}
     <p class="mt-1 text-gray-500">{{ total }} prospect{{ 's' if total != 1 else '' }} processed</p>
+    {% endif %}
   </div>
   <a href="/download/{{ job_id }}"
     class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors shadow-sm">
@@ -17,6 +23,19 @@
     Download CSV
   </a>
 </div>
+
+{% if job_status == 'queued' or job_status == 'running' %}
+<div id="job-progress" class="mb-6 rounded-lg bg-indigo-50 border border-indigo-200 px-4 py-3 text-sm text-indigo-800">
+  <p class="font-medium">Run in progress</p>
+  <p id="job-progress-detail" class="mt-1">
+    {% if current_prospect %}Working on {{ current_prospect }}. {% endif %}{{ completed }} of {{ planned_total }} finished. This page updates automatically.
+  </p>
+</div>
+{% elif job_status == 'failed' and job_error %}
+<div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+  {{ job_error }}
+</div>
+{% endif %}
 
 <!-- Summary stats -->
 <div class="grid grid-cols-3 gap-4 mb-8">
@@ -153,5 +172,38 @@
     Download all results as CSV
   </a>
 </div>
+
+{% if job_status == 'queued' or job_status == 'running' %}
+<script>
+(function () {
+  const jobId = {{ job_id | tojson }};
+  const seenCompleted = {{ completed }};
+  const detail = document.getElementById('job-progress-detail');
+
+  async function poll() {
+    try {
+      const res = await fetch('/jobs/' + jobId, {
+        headers: { 'Accept': 'application/json' },
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.status === 'done' || data.status === 'failed' || data.completed !== seenCompleted) {
+        window.location.reload();
+        return;
+      }
+      const who = data.current_prospect ? ('Working on ' + data.current_prospect + '. ') : '';
+      if (detail) {
+        detail.textContent = who + data.completed + ' of ' + data.total + ' finished. This page updates automatically.';
+      }
+    } catch (err) {
+      // Keep the last status on screen and try again on the next tick.
+    }
+  }
+
+  setInterval(poll, 3000);
+})();
+</script>
+{% endif %}
 
 {% endblock %}

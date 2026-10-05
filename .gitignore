@@ -16,6 +16,8 @@ venv/
 
 # databases
 *.db
+*.db-shm
+*.db-wal
 
 # IDE
 .DS_Store
