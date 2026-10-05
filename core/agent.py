@@ -3,6 +3,8 @@ AI Agent pipeline — deep prospect research via Claude Agent SDK.
 CompanyContext drives both the scoring ICP and the email value props.
 """
 
+import asyncio
+import logging
 import re
 from claude_agent_sdk import (
     query,
@@ -14,9 +16,17 @@ from claude_agent_sdk import (
 )
 
 from .models import CompanyContext, Prospect, LeadScore
-from .output import parse_email
+from .output import parse_email, parse_score
+from .reliability import (
+    DISCOVERY_TIMEOUT_SECONDS,
+    EMAIL_TIMEOUT_SECONDS,
+    SCORE_TIMEOUT_SECONDS,
+    job_id_var,
+    with_retries,
+)
 
 SCORE_THRESHOLD = 6
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -56,11 +66,11 @@ def _parse_prospects(text: str) -> list[dict]:
 
     return prospects
 
-def _print_step(label: str, detail: str = "") -> None:
+def _log(label: str, detail: str = "") -> None:
     if detail:
-        print(f"  [{label}] {detail}")
+        logger.info("job=%s [%s] %s", job_id_var.get(), label, detail)
     else:
-        print(f"  [{label}]")
+        logger.info("job=%s [%s]", job_id_var.get(), label)
 
 
 def _log_message(message: AssistantMessage, turn: int) -> None:
@@ -69,52 +79,49 @@ def _log_message(message: AssistantMessage, turn: int) -> None:
             preview = block.text.strip()
             if len(preview) > 200:
                 preview = preview[:200] + "…"
-            _print_step(f"turn {turn} · text", preview)
+            _log(f"turn {turn} · text", preview)
         elif hasattr(block, "type") and block.type == "tool_use":
             name = getattr(block, "name", "tool")
             inp = getattr(block, "input", {}) or {}
             if name == "WebSearch":
-                _print_step(f"turn {turn} · WebSearch", f'"{inp.get("query", "")}"')
+                _log(f"turn {turn} · WebSearch", f'"{inp.get("query", "")}"')
             elif name == "WebFetch":
-                _print_step(f"turn {turn} · WebFetch", inp.get("url", ""))
+                _log(f"turn {turn} · WebFetch", inp.get("url", ""))
             else:
-                _print_step(f"turn {turn} · {name}", str(inp)[:120])
+                _log(f"turn {turn} · {name}", str(inp)[:120])
 
 
-def _parse_score(text: str) -> dict:
-    def _num(pattern, default=5.0):
-        m = re.search(pattern, text, re.IGNORECASE)
-        try:
-            return float(m.group(1)) if m else default
-        except (ValueError, AttributeError):
-            return default
+async def _query_text(prompt: str, options: ClaudeAgentOptions, label: str) -> str:
+    """Collect the final ResultMessage text from one agent session."""
+    raw_text = ""
+    turn = 0
+    async for message in query(prompt=prompt, options=options):
+        if isinstance(message, SystemMessage) and message.subtype == "init":
+            session = (message.data or {}).get("session_id", "")
+            _log(label, session[:8])
+        elif isinstance(message, AssistantMessage):
+            turn += 1
+            _log(f"turn {turn}", "working…")
+            _log_message(message, turn)
+            if message.usage:
+                _log(
+                    f"turn {turn} · tokens",
+                    f"in={message.usage.get('input_tokens', '?')}  out={message.usage.get('output_tokens', '?')}",
+                )
+        elif isinstance(message, ResultMessage):
+            _log(f"{label} done", f"stop={message.stop_reason}  turns={turn}")
+            raw_text = message.result or ""
+    if not raw_text.strip():
+        raise ValueError(f"{label} returned an empty response.")
+    return raw_text
 
-    signals = []
-    in_signals = False
-    for line in text.splitlines():
-        if re.match(r"SIGNALS\s*:", line, re.IGNORECASE):
-            in_signals = True
-            continue
-        if in_signals:
-            stripped = line.strip()
-            if stripped.startswith("-"):
-                signals.append(stripped.lstrip("- ").strip())
-            elif stripped:
-                in_signals = False
 
-    rationale = ""
-    m = re.search(r"RATIONALE\s*:(.*)", text, re.IGNORECASE | re.DOTALL)
-    if m:
-        rationale = m.group(1).strip()
-
-    return {
-        "total":        _num(r"TOTAL\s*:\s*([\d.]+)"),
-        "icp_fit":      _num(r"ICP_FIT\s*:\s*([\d.]+)"),
-        "timing":       _num(r"TIMING\s*:\s*([\d.]+)"),
-        "reachability": _num(r"REACHABILITY\s*:\s*([\d.]+)"),
-        "signals":      signals or ["No specific signals found"],
-        "rationale":    rationale or text.strip(),
-    }
+async def _query_within(prompt: str, options: ClaudeAgentOptions, label: str, timeout: int) -> str:
+    try:
+        return await asyncio.wait_for(_query_text(prompt, options, label), timeout=timeout)
+    except TimeoutError:
+        minutes = max(1, round(timeout / 60))
+        raise TimeoutError(f"{label} timed out after {minutes} minutes.") from None
 
 
 # ---------------------------------------------------------------------------
@@ -161,26 +168,17 @@ SIGNALS:
 - <signal 3>
 RATIONALE: <one paragraph>"""
 
-    raw_text = ""
-    turn = 0
+    options = ClaudeAgentOptions(
+        allowed_tools=["WebSearch", "WebFetch"],
+        max_turns=8,
+    )
 
-    async for message in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(
-            allowed_tools=["WebSearch", "WebFetch"],
-            max_turns=8,
-        ),
-    ):
-        if isinstance(message, SystemMessage) and message.subtype == "init":
-            _print_step("scoring session", message.data.get("session_id", "")[:8])
-        elif isinstance(message, AssistantMessage):
-            turn += 1
-            _log_message(message, turn)
-        elif isinstance(message, ResultMessage):
-            raw_text = message.result
+    async def attempt() -> LeadScore:
+        raw_text = await _query_within(prompt, options, "scoring session", SCORE_TIMEOUT_SECONDS)
+        parsed = parse_score(raw_text)
+        return LeadScore(skip=parsed["total"] < SCORE_THRESHOLD, **parsed)
 
-    parsed = _parse_score(raw_text)
-    return LeadScore(skip=parsed["total"] < SCORE_THRESHOLD, **parsed)
+    return await with_retries(attempt)
 
 
 async def research_and_email(
@@ -259,33 +257,17 @@ Subject: <subject line>
 
 Output ONLY the email. No preamble."""
 
-    raw_text = ""
-    turn = 0
+    options = ClaudeAgentOptions(
+        system_prompt=system_prompt,
+        allowed_tools=["WebSearch", "WebFetch"],
+        max_turns=10,
+    )
 
-    async for message in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(
-            system_prompt=system_prompt,
-            allowed_tools=["WebSearch", "WebFetch"],
-            max_turns=10,
-        ),
-    ):
-        if isinstance(message, SystemMessage) and message.subtype == "init":
-            _print_step("email session", message.data.get("session_id", "")[:8])
-        elif isinstance(message, AssistantMessage):
-            turn += 1
-            _print_step(f"turn {turn}", "working…")
-            _log_message(message, turn)
-            if message.usage:
-                _print_step(
-                    f"turn {turn} · tokens",
-                    f"in={message.usage.get('input_tokens','?')}  out={message.usage.get('output_tokens','?')}",
-                )
-        elif isinstance(message, ResultMessage):
-            _print_step("done", f"stop={message.stop_reason}  turns={turn}")
-            raw_text = message.result
+    async def attempt() -> tuple[str, str]:
+        raw_text = await _query_within(prompt, options, "email session", EMAIL_TIMEOUT_SECONDS)
+        return parse_email(raw_text)
 
-    return parse_email(raw_text)
+    return await with_retries(attempt)
 
 
 async def discover_prospects(ctx: CompanyContext, count: int = 5) -> list[Prospect]:
@@ -329,29 +311,19 @@ WEBSITE: <company website URL>
 
 Output ONLY the {count} prospect blocks. No introduction, no explanation."""
 
-    raw_text = ""
-    turn = 0
+    options = ClaudeAgentOptions(
+        allowed_tools=["WebSearch", "WebFetch"],
+        max_turns=12,
+    )
 
-    print(f"\n[discovery] Searching for {count} prospects matching ICP…")
+    logger.info("job=%s [discovery] Searching for %s prospects matching ICP", job_id_var.get(), count)
 
-    async for message in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(
-            allowed_tools=["WebSearch", "WebFetch"],
-            max_turns=12,
-        ),
-    ):
-        if isinstance(message, SystemMessage) and message.subtype == "init":
-            _print_step("discovery session", message.data.get("session_id", "")[:8])
-        elif isinstance(message, AssistantMessage):
-            turn += 1
-            _log_message(message, turn)
-        elif isinstance(message, ResultMessage):
-            _print_step("discovery done", f"turns={turn}")
-            raw_text = message.result
+    async def attempt() -> str:
+        return await _query_within(prompt, options, "discovery session", DISCOVERY_TIMEOUT_SECONDS)
 
+    raw_text = await with_retries(attempt)
     parsed = _parse_prospects(raw_text)
-    print(f"  Found {len(parsed)} prospect(s)")
+    logger.info("job=%s [discovery] Found %s prospect(s)", job_id_var.get(), len(parsed))
 
     return [
         Prospect(
