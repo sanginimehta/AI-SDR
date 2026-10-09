@@ -49,7 +49,10 @@ class FakeClient:
         self.completions = self
 
     def create(self, **kwargs):
-        self.calls.append(kwargs)
+        # Copy the list. The agent keeps appending to the same messages object.
+        recorded = dict(kwargs)
+        recorded["messages"] = list(kwargs["messages"])
+        self.calls.append(recorded)
         if not self.script:
             raise AssertionError("the model was called more times than the test scripted")
         return _Response(self.script.pop(0))
