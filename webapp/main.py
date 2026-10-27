@@ -102,7 +102,7 @@ async def run(
     company_name: str = Form(...),
     product_name: str = Form(...),
     company_website: str = Form(""),
-    value_props: str = Form(...),
+    value_props: str = Form(""),
     icp_description: str = Form(...),
     mode: str = Form(...),
     prospect_count: str = Form(default="5"),
@@ -121,6 +121,7 @@ async def run(
             company_website,
             value_props,
             icp_description,
+            mode=selected,
         )
         require_api_key(selected)
         prospects: list[Prospect] = []
@@ -289,10 +290,51 @@ async def _generate_bulk_email(prospect: Prospect, ctx: CompanyContext, groq_key
 
 async def _run_autopilot(job_id: str, ctx: CompanyContext, count: int) -> None:
     from core.agent import discover_prospects
+    from core.seller import enrich_company_context, summarize_seller_site
+
+    enriched = ctx
+    if ctx.website:
+        jobs.set_current(job_id, f"Learning product from {ctx.website}")
+        logger.info("job=%s step=seller-site url=%s", job_id, ctx.website)
+        summary = await asyncio.to_thread(
+            summarize_seller_site,
+            ctx.website,
+            company_name=ctx.name,
+            product_hint=ctx.product,
+        )
+        if summary.scrape_error and not summary.ok:
+            logger.warning(
+                "job=%s step=seller-site error=%s",
+                job_id,
+                summary.scrape_error,
+            )
+            # Keep going with whatever the user typed; do not fail the whole run
+            # unless they also left value props empty.
+            if not (ctx.value_props or "").strip():
+                _store_discovery_error(
+                    job_id,
+                    "Could not learn your product from the company website "
+                    f"({summary.scrape_error}). Add value props manually or fix the URL.",
+                )
+                return
+        else:
+            enriched = enrich_company_context(ctx, summary)
+            logger.info(
+                "job=%s step=seller-site product=%s value_props_len=%s",
+                job_id,
+                enriched.product,
+                len(enriched.value_props or ""),
+            )
+    elif not (ctx.value_props or "").strip():
+        _store_discovery_error(
+            job_id,
+            "Add a company website or value props so Autopilot knows what you sell.",
+        )
+        return
 
     logger.info("job=%s step=discover count=%s", job_id, count)
     try:
-        prospects = await discover_prospects(ctx, count=count)
+        prospects = await discover_prospects(enriched, count=count)
     except Exception as exc:
         logger.warning("job=%s step=discover error=%s", job_id, exc)
         _store_discovery_error(job_id, str(exc))
@@ -306,7 +348,7 @@ async def _run_autopilot(job_id: str, ctx: CompanyContext, count: int) -> None:
         return
 
     jobs.set_total(job_id, len(prospects))
-    await _score_and_email_all(job_id, prospects, ctx, mode="autopilot")
+    await _score_and_email_all(job_id, prospects, enriched, mode="autopilot")
 
 
 def _store_discovery_error(job_id: str, message: str) -> None:

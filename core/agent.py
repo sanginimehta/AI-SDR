@@ -24,6 +24,7 @@ from .reliability import (
     job_id_var,
     with_retries,
 )
+from .seller import seller_prompt_block
 
 SCORE_THRESHOLD = 6
 logger = logging.getLogger(__name__)
@@ -137,6 +138,8 @@ async def score_lead(prospect: Prospect, ctx: CompanyContext) -> LeadScore:
 
     prompt = f"""Evaluate whether this prospect is worth outreach for {ctx.name} ({ctx.product}).
 
+{seller_prompt_block(ctx)}
+
 {ctx.name}'s ideal customer:
 {ctx.icp_description}
 
@@ -152,7 +155,7 @@ Steps:
 2. Search for recent signals: M&A, regulatory actions, compliance initiatives, leadership changes,
    breaches, technology investments, or product launches.
 3. Score on three dimensions (1-10 each):
-   - ICP_FIT: Does this company and title match the ideal customer profile above?
+   - ICP_FIT: Does this company and title match the ideal customer profile above AND buy what {ctx.product} sells?
    - TIMING: Are there recent urgency signals suggesting a need RIGHT NOW?
    - REACHABILITY: Is this title a real decision-maker we can meaningfully reach?
 
@@ -197,7 +200,9 @@ async def research_and_email(
     system_prompt = f"""You are an expert B2B sales development representative for {ctx.name}.
 Your product is {ctx.product}.
 
-{ctx.value_props}
+{seller_prompt_block(ctx)}
+
+Ground every product claim in the seller context above. Do not invent features.
 
 Email guidelines:
 - Subject line + 3 short paragraphs, under 150 words total
@@ -287,18 +292,23 @@ async def discover_prospects(ctx: CompanyContext, count: int = 5) -> list[Prospe
     """
     prompt = f"""You are a B2B sales researcher for {ctx.name}, which sells {ctx.product}.
 
-Your job: find {count} real, named decision-makers at companies that match this ICP:
+{seller_prompt_block(ctx)}
+
+Your job: find {count} real, named decision-makers at companies that match this ICP
+AND would plausibly buy {ctx.product}:
 
 {ctx.icp_description}
 
 Steps:
 1. Search for companies that match this ICP — focus on finding real company names,
    not generic descriptions. Be specific: search for actual named companies.
-2. For each company you find, search for the right decision-maker title
+2. Prefer companies whose pain points align with what {ctx.product} solves
+   (from the seller context above).
+3. For each company you find, search for the right decision-maker title
    (e.g. CISO, Chief Risk Officer, VP Compliance, Head of Security) and find
    a real named person in that role if possible. Use LinkedIn search queries,
    press releases, company leadership pages, or news articles.
-3. Return exactly {count} prospects in the format below. Only include real people
+4. Return exactly {count} prospects in the format below. Only include real people
    and companies you actually found evidence for — do not fabricate names.
 
 Output format — one block per prospect, separated by a blank line:

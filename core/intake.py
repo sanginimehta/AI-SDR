@@ -27,26 +27,37 @@ def company_context(
     website: str,
     value_props: str,
     icp_description: str,
+    *,
+    mode: str | None = None,
 ) -> CompanyContext:
     cleaned_name = (name or "").strip()
     cleaned_product = (product or "").strip()
     cleaned_values = (value_props or "").strip()
     cleaned_icp = (icp_description or "").strip()
+    cleaned_website = (website or "").strip()
     missing = []
     if not cleaned_name:
         missing.append("company name")
     if not cleaned_product:
         missing.append("product name")
-    if not cleaned_values:
-        missing.append("value props")
     if not cleaned_icp:
         missing.append("ICP description")
+    # Autopilot can learn value props from the company website when the
+    # textarea is left short or empty. Other modes still need them typed in.
+    needs_value_props = not cleaned_values and not (
+        mode == "autopilot" and cleaned_website
+    )
+    if needs_value_props:
+        if mode == "autopilot":
+            missing.append("value props or company website")
+        else:
+            missing.append("value props")
     if missing:
         raise IntakeError("Please fill in: " + ", ".join(missing) + ".")
     return CompanyContext(
         name=cleaned_name,
         product=cleaned_product,
-        website=(website or "").strip(),
+        website=cleaned_website,
         value_props=cleaned_values,
         icp_description=cleaned_icp,
     )

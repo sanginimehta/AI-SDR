@@ -1,119 +1,135 @@
-# AI Sales Outreach Agent
+# AI SDR
 
-An AI-powered outreach system that researches prospects, scores them against your ICP, and writes personalized cold emails — grounded in real, current information about each company.
+An AI-powered sales development agent that learns what you sell from your company website, finds prospects that match your ICP, scores them, and writes personalized cold emails grounded in live research.
 
-Works for any B2B company. Enter your product, value props, and ideal customer profile — the agent handles the rest.
+Built for GTM / growth workflows. Stack: Claude Agent SDK + FastAPI + Tailwind CSS.
 
-**[Try the web app](#how-to-run-it)** · Built with Claude Agent SDK + FastAPI + Tailwind CSS
+**[Try the web app](#how-to-run-it)**
 
 ---
 
 ## The problem it solves
 
-A typical SDR spends 30–45 minutes researching a single high-value prospect before writing a cold email: reading news, checking LinkedIn, scanning 10-Ks, looking for a hook that doesn't feel generic. At scale, that's most of the working day — before a single word of outreach gets written.
+A typical SDR spends 30–45 minutes researching a single high-value prospect before writing a cold email: reading news, checking LinkedIn, scanning filings, looking for a hook that doesn't feel generic. At scale, that's most of the working day — before a single word of outreach gets written.
 
 This tool automates that research and writes the email. The result is a message grounded in something real — a merger, a regulatory filing, a compliance initiative — not a mail-merge template with the company name swapped in.
 
 ---
 
+## Autopilot demo path (recommended)
+
+This is the resume / portfolio happy path: **website + ICP → prospects → scored emails**.
+
+1. Install and configure keys:
+
+```bash
+git clone https://github.com/sanginimehta/AI-SDR.git
+cd AI-SDR
+pip install -r requirements.txt
+cp .env.example .env
+# Required for Autopilot: ANTHROPIC_API_KEY
+# Optional but better product summaries: GROQ_API_KEY
+```
+
+2. Start the app:
+
+```bash
+uvicorn webapp.main:app --reload
+```
+
+Open `http://localhost:8000`.
+
+3. On **Autopilot** (default), fill in:
+
+| Field | Example |
+|---|---|
+| Company name | LogicGate |
+| Product name | Risk Cloud |
+| Company website | `https://www.logicgate.com` |
+| What your product does | Optional if the website is set — Autopilot scrapes the site and learns value props |
+| ICP | CISOs / CROs at mid-market banks with active compliance programs |
+| Prospect count | Start with **3** |
+
+4. Submit. The results page opens immediately while the job runs in the background:
+
+- Learns your product from the company website
+- Discovers matching decision-makers
+- Scores each lead (ICP fit / timing / reachability)
+- Writes a personalized email for anyone above the threshold
+- Lets you download a CRM-ready CSV
+
+If the website cannot be scraped and you left value props empty, the job fails with a clear error instead of inventing a product story.
+
+---
+
 ## What it does
+
+**Step 0 — Learn the product (Autopilot)**
+
+When you provide a company website, the app scrapes the homepage and summarizes what you sell. Short or empty value props are filled from that summary. Your ICP text is never overwritten.
 
 **Step 1 — Lead scoring**
 
 Before writing anything, the agent researches each prospect and scores them 1–10 across three dimensions:
 
-- **ICP fit** — Is this the right industry (regulated), company size, and title (CISO, CRO, VP Compliance)?
-- **Timing signals** — Are there recent urgency triggers? A merger closing, a regulatory fine, a new CISO hire, a breach, an IPO?
-- **Reachability** — Is this a real decision-maker or a gatekeeper?
+- **ICP fit** — Right industry, company profile, and title for what you sell?
+- **Timing signals** — Recent urgency triggers (M&A, fine, new hire, breach, IPO)?
+- **Reachability** — Real decision-maker or gatekeeper?
 
 Prospects scoring below 6 are skipped. Only qualified leads get emails written.
 
 **Step 2 — Personalized email generation**
 
-For each lead that passes scoring, the agent reads recent news, regulatory filings, and company context, then writes a cold email that:
+For each lead that passes scoring, the agent reads recent news and company context, then writes a cold email that:
 
 - Opens with a specific hook tied to something happening at that company right now
-- Connects their compliance and risk challenges to what Risk Cloud solves
+- Connects their challenges to what your product solves (from the website-learned context)
 - Closes with a low-pressure ask
 
-**Step 3 — Memory**
+**Step 3 — Memory (CLI)**
 
-Every email sent is saved per prospect. On the next outreach cycle, the agent reads the previous emails and finds a completely different angle — a new news hook, a different product angle, a relevant case study. It never sends the same message twice.
-
----
-
-## Real output
-
-**Scoring pass — 3 prospects evaluated:**
-
-```
-  Prospect                          Score   Decision
-  ------------------------------------------------
-  Sarah Chen @ Pinnacle Financial   8.5/10  EMAIL →
-  Marcus Webb @ Denny's Corp        3.0/10  SKIP
-  Jennifer Park @ Regions Financial 7.5/10  EMAIL →
-```
-
-**Email generated for Sarah Chen, CISO, Pinnacle Financial Partners:**
-
-> **Subject: GRC at $119B — before the next exam cycle**
->
-> Sarah,
->
-> Closing a merger the size of Pinnacle + Synovus on January 2nd is no small feat — but I'd imagine the GRC aftermath is still very much in motion: two control libraries, two audit programs, two vendor risk inventories, and examiners who won't wait for the dust to settle.
->
-> That's exactly where Risk Cloud tends to show up for regional banks at inflection points like this. We replace the patchwork of spreadsheets and point tools with a single connected platform — pre-mapped to FFIEC, NIST CSF, and PCI-DSS — so your team gets unified risk visibility across the combined entity without a lengthy implementation.
->
-> I'd welcome a 20-minute conversation to share how a few other post-merger regional banks have used Risk Cloud to consolidate fast. Worth a slot this month?
-
-The agent found the Synovus merger news on its own. No human input beyond the prospect's name and company.
-
-**Follow-up email (run #2 — different angle, found automatically):**
-
-> **Subject: Running two tech stacks through Q2 2027 — the compliance math**
->
-> Sarah,
->
-> Saw that Pinnacle's full system conversion is expected around Q2 2027 — meaning your team is managing compliance across two parallel environments for the better part of a year. Two control sets, two evidence trails, two audit scopes, one board report due quarterly.
->
-> Risk Cloud handles this well. Regional banks in mid-integration use it to maintain a single view across disparate systems — automated evidence collection, unified control mapping, workflow-driven assessments — so you're not stitching together a risk posture while the core conversion is still months out.
->
-> I can share a case study from a bank that used Risk Cloud to stay examiner-ready through a multi-year core migration. Worth 20 minutes before the Q2 sprint kicks in?
-
-Same prospect, second touchpoint, completely different hook — found because the agent checked what it had already sent and went looking for something new.
+The CLI agent (`prospect_agent.py`) saves every email per prospect under `prospect_memory/`. On the next cycle it finds a different angle. The web app does not wire memory yet.
 
 ---
 
-## Three modes
+## Modes
 
 | Mode | How it works | Best for |
 |---|---|---|
-| **Autopilot** | Describe your ICP — the agent finds real prospects, scores them, and writes emails. No list needed. | Starting from scratch, net-new markets |
-| **AI Agent** | Upload your own prospect list — the agent researches, scores, and personalizes each one. | ABM, high-value accounts |
-| **Bulk** | Upload a CSV — fast email generation via LLaMA 3.3 (Groq). No scoring. | High-volume top-of-funnel |
+| **Autopilot** | Website + ICP → learn product → find prospects → score → email | Starting from scratch, resume demos |
+| **Bulk** | Upload a CSV or enter rows — scrape prospect sites, generate emails via LLaMA 3.3 (Groq). No scoring. | High-volume top-of-funnel |
+| **AI Agent** (API / CLI) | Your prospect list + deep Claude research and scoring | ABM, high-value accounts |
+
+The web UI currently shows Autopilot and Bulk. Agent mode remains available via the CLI and backend.
 
 ---
 
 ## How to run it
 
-### Web app (recommended)
+### Web app
 
 ```bash
-git clone https://github.com/sanginimehta/Trynow.git
-cd Trynow
 pip install -r requirements.txt
-cp .env.example .env   # add ANTHROPIC_API_KEY (and optionally GROQ_API_KEY)
+cp .env.example .env   # ANTHROPIC_API_KEY; optional GROQ_API_KEY / CLEARBIT_API_KEY
 uvicorn webapp.main:app --reload
 ```
 
-Open `http://localhost:8000`. Enter your company context, pick a mode, and run.
+Open `http://localhost:8000`. Jobs are stored in SQLite (`jobs.db`) so refreshing the results page does not lose a run.
 
-### Command line (original scripts)
+### Command line
 
 ```bash
 python prospect_agent.py   # agent mode with memory
 python generate_emails.py  # bulk pipeline
 ```
+
+### Health check
+
+```bash
+curl http://localhost:8000/health
+```
+
+Returns whether each API key is present (booleans only).
 
 ---
 
@@ -121,22 +137,26 @@ python generate_emails.py  # bulk pipeline
 
 | File / Folder | What it does |
 |---|---|
-| `webapp/` | FastAPI web app — form UI, job management, CSV download |
-| `core/agent.py` | Claude Agent SDK: scoring, email research, autopilot discovery |
-| `core/pipeline.py` | Bulk pipeline: homepage scraping + Groq email generation |
-| `core/models.py` | Shared data models (`Prospect`, `LeadScore`, `OutreachResult`) |
-| `agent_output.csv` | Sample agent output — two emails for one prospect, different angles |
+| `webapp/` | FastAPI app — form UI, background jobs, results poll, CSV download |
+| `core/agent.py` | Claude Agent SDK: discovery, scoring, email research |
+| `core/seller.py` | Scrape + summarize the seller company website |
+| `core/pipeline.py` | Bulk pipeline: prospect homepage scraping + Groq email generation |
+| `core/jobs.py` | SQLite job store |
+| `core/intake.py` | Request validation (mode, keys, CSV, caps) |
+| `core/reliability.py` | Timeouts, retries, concurrency limits |
+| `tests/` | Reliability and seller-site unit tests |
+| `agent_output.csv` | Sample agent output |
 | `output.csv` | Sample bulk output — Nike and Stripe |
 
 ---
 
 ## Why two approaches?
 
-| | Bulk pipeline | AI Agent / Autopilot |
+| | Bulk pipeline | Autopilot / Agent |
 |---|---|---|
 | Speed | Seconds per prospect | Minutes per prospect |
 | Cost | Low (open-source LLM) | Higher (Claude) |
 | Personalization | Good — homepage + enrichment | High — live web research |
-| Best for | Top-of-funnel, high volume | High-value accounts, ABM |
+| Best for | Top-of-funnel, high volume | High-value accounts, net-new prospecting |
 
-In a real GTM workflow: bulk to process the long tail, agent for your top accounts.
+In a real GTM workflow: Autopilot to open a new market, bulk to process the long tail, agent for your top accounts.

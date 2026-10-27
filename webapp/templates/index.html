@@ -97,15 +97,27 @@
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
       </div>
       <div class="sm:col-span-2">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Company website</label>
-        <input type="url" name="company_website" placeholder="https://logicgate.com"
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Company website
+          <span id="website-required-mark" class="text-red-500 hidden">*</span>
+        </label>
+        <input type="url" name="company_website" id="company_website" placeholder="https://logicgate.com"
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
+        <p id="website-hint" class="mt-1.5 text-xs text-gray-400">
+          Autopilot reads this page to learn what you sell before finding prospects.
+        </p>
       </div>
       <div class="sm:col-span-2">
-        <label class="block text-sm font-medium text-gray-700 mb-1">What your product does <span class="text-red-500">*</span></label>
-        <textarea name="value_props" required rows="3"
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          What your product does
+          <span id="value-props-required-mark" class="text-red-500">*</span>
+        </label>
+        <textarea name="value_props" id="value_props" rows="3"
           placeholder="e.g. A no-code GRC platform that helps regulated industries manage risk, compliance, and audit programs in one connected system. Pre-built control frameworks for SOC 2, FFIEC, NIST CSF. Automated evidence collection. No custom code required."
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none"></textarea>
+        <p id="value-props-hint" class="mt-1.5 text-xs text-gray-400 hidden">
+          Optional in Autopilot when you provide a company website — we scrape it and fill this in.
+        </p>
       </div>
       <div class="sm:col-span-2">
         <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -232,6 +244,28 @@
 </div>
 
 <script>
+  function syncSellerFieldRequirements(mode) {
+    const valueProps = document.getElementById('value_props');
+    const valueMark = document.getElementById('value-props-required-mark');
+    const valueHint = document.getElementById('value-props-hint');
+    const websiteMark = document.getElementById('website-required-mark');
+    const websiteHint = document.getElementById('website-hint');
+    const isAutopilot = mode === 'autopilot';
+
+    if (valueProps) {
+      // Autopilot can learn value props from the company website.
+      valueProps.required = !isAutopilot;
+    }
+    if (valueMark) valueMark.classList.toggle('hidden', isAutopilot);
+    if (valueHint) valueHint.classList.toggle('hidden', !isAutopilot);
+    if (websiteMark) websiteMark.classList.toggle('hidden', !isAutopilot);
+    if (websiteHint) {
+      websiteHint.textContent = isAutopilot
+        ? 'Autopilot reads this page to learn what you sell before finding prospects.'
+        : 'Optional. Used for context when generating bulk emails.';
+    }
+  }
+
   function onModeChange(mode) {
     const autopilotSection = document.getElementById('section-autopilot');
     const bulkSection      = document.getElementById('section-bulk');
@@ -259,6 +293,7 @@
       cardAutopilot.classList.add(...inactiveCard);
       submitLabel.textContent = 'Generate emails →';
     }
+    syncSellerFieldRequirements(mode);
   }
 
   function showProspectMode(mode) {
@@ -300,15 +335,28 @@
     tbody.appendChild(clone);
   }
 
-  document.getElementById('main-form').addEventListener('submit', function () {
+  document.getElementById('main-form').addEventListener('submit', function (event) {
     const mode = document.querySelector('input[name="mode"]:checked')?.value;
+    const website = (document.getElementById('company_website')?.value || '').trim();
+    const valueProps = (document.getElementById('value_props')?.value || '').trim();
+    if (mode === 'autopilot' && !website && !valueProps) {
+      event.preventDefault();
+      alert('Autopilot needs a company website or value props so it knows what you sell.');
+      return;
+    }
     const msgs = {
-      autopilot: 'Agent is searching for prospects and writing emails… (3–10 min)',
+      autopilot: website
+        ? 'Learning your product from the website, then finding prospects… (3–10 min)'
+        : 'Agent is searching for prospects and writing emails… (3–10 min)',
       bulk: 'Generating emails…',
     };
     document.getElementById('loading-msg').textContent = msgs[mode] || 'Running…';
     document.getElementById('loading-overlay').classList.remove('hidden');
   });
+
+  syncSellerFieldRequirements(
+    document.querySelector('input[name="mode"]:checked')?.value || 'autopilot'
+  );
 </script>
 
 {% endblock %}
