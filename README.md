@@ -26,8 +26,8 @@ The form asks for your company website. If you leave "What your product does" bl
 ## How to run it
 
 ```bash
-git clone https://github.com/sanginimehta/Trynow.git
-cd Trynow
+git clone https://github.com/sanginimehta/AI-SDR.git
+cd AI-SDR
 pip install -r requirements.txt
 cp .env.example .env
 uvicorn webapp.main:app --reload
@@ -40,10 +40,6 @@ Put `GROQ_API_KEY` in `.env` before a bulk run. Put `ANTHROPIC_API_KEY` in `.env
 To try bulk: choose **Bulk pipeline**, fill in your company and ideal customer, add one prospect with a real website (or upload a CSV), then click **Generate emails**. CSV columns are `name, title, company, industry`, and optional `website`. A template is at `http://localhost:8000/sample-csv`.
 
 `prospect_agent.py` is the original command-line scorer. It keeps a local note of emails it has already written so a later run can use a different angle. The web app does not do that yet.
-
-## Resume
-
-> Built a FastAPI outreach app that drafts personalized B2B cold emails from a company site and a prospect list, with a fast Groq bulk mode and one-click mail drafts. https://github.com/sanginimehta/Trynow
 
 ## Files
 
