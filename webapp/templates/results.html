@@ -102,10 +102,24 @@
 
     {% else %}
     <!-- Email preview -->
-    <div class="mb-2">
-      <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Subject</span>
-      <p class="text-sm font-semibold text-gray-900 mt-0.5">{{ r.email_subject }}</p>
+    <div class="mb-3 flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Subject</span>
+        <p class="text-sm font-semibold text-gray-900 mt-0.5">{{ r.email_subject }}</p>
+      </div>
+      {% if r.mailto %}
+      <a href="{{ r.mailto }}"
+        class="inline-flex items-center gap-2 shrink-0 bg-white text-gray-900 text-sm font-semibold px-4 py-2 rounded-lg ring-1 ring-gray-300 hover:bg-gray-50 transition-colors">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+        </svg>
+        Open draft in mail
+      </a>
+      {% endif %}
     </div>
+    {% if r.mailto %}
+    <p class="text-xs text-gray-400 mb-3">Opens a new message in your mail app with the subject and body filled in. Add who it's to, then send or save the draft.</p>
+    {% endif %}
 
     <details class="group">
       <summary class="cursor-pointer text-sm text-indigo-600 hover:text-indigo-800 font-medium select-none list-none flex items-center gap-1">

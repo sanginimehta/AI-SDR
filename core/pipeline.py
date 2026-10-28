@@ -12,12 +12,12 @@ from bs4 import BeautifulSoup
 from groq import Groq
 
 from .models import CompanyContext, Prospect
-from .output import parse_email
+from .output import EMAIL_VOICE, parse_email
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "openai/gpt-oss-20b"
 
 
-def _scrape_homepage(url: str) -> str:
+def scrape_homepage(url: str) -> str:
     headers = {"User-Agent": "Mozilla/5.0"}
     resp = requests.get(url, headers=headers, timeout=10)
     resp.raise_for_status()
@@ -76,7 +76,7 @@ def generate_email(
     homepage_text = ""
     if prospect.website:
         try:
-            homepage_text = _scrape_homepage(prospect.website)
+            homepage_text = scrape_homepage(prospect.website)
         except Exception:
             pass
 
@@ -115,7 +115,9 @@ Prospect:
 Write a subject line and 3-paragraph email:
 1. Personalized opener referencing something specific about {prospect.company}
 2. Connect their likely challenges to what {ctx.product} solves
-3. Low-pressure CTA (20-min call or relevant resource)
+3. Low-pressure ask (20-minute call or a relevant resource)
+
+{EMAIL_VOICE}
 
 Format:
 Subject: <subject line>
@@ -127,7 +129,7 @@ Keep it under 150 words. Peer-to-peer tone, no buzzwords. Do not use placeholder
     resp = groq_client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=300,
+        max_tokens=1200,
         temperature=0.7,
     )
     raw = resp.choices[0].message.content.strip()

@@ -15,6 +15,7 @@ import anyio
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from core.output import humanize_prose
 from claude_agent_sdk import (
     query,
     ClaudeAgentOptions,
@@ -47,8 +48,10 @@ Email guidelines:
 - Subject line + 3 short paragraphs, under 150 words total
 - Paragraph 1: personalized opener referencing something specific and current
 - Paragraph 2: connect their pain points to what Risk Cloud solves
-- Paragraph 3: low-pressure CTA — 20-minute call or a relevant resource
+- Paragraph 3: low-pressure ask, a 20-minute call or a relevant resource
 - Tone: peer-to-peer, direct, no fluff
+- Write like a person. Use contractions. No em dashes, en dashes, or double hyphens (--).
+- No bullets, headers, or bold. Skip "I hope this finds you well", "leverage", and "excited to".
 """
 
 # ---------------------------------------------------------------------------
@@ -361,7 +364,7 @@ Output ONLY the final email (subject + body). No preamble."""
             _print_step("done", f"stop_reason={message.stop_reason}  turns={turn}")
             result_text = message.result
 
-    return result_text, session_id
+    return humanize_prose(result_text), session_id
 
 
 # ---------------------------------------------------------------------------

@@ -3,11 +3,13 @@ FastAPI web app — form-driven interface for the AI outreach pipeline.
 Supports bulk (Groq) and agent (Claude) modes, CSV upload or manual entry.
 """
 
+import asyncio
 import csv
 import io
 import os
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Request, UploadFile, File
@@ -16,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 
 from core.models import CompanyContext, Prospect, OutreachResult
 from core.output import results_to_csv, result_to_dict
+from core.pipeline import scrape_homepage
 
 load_dotenv()
 
@@ -24,6 +27,25 @@ templates = Jinja2Templates(directory="webapp/templates")
 
 # In-memory job store: job_id → list of result dicts
 results_store: dict[str, list] = {}
+
+# Homepage text shorter than this is not enough to describe a product.
+MIN_PRODUCT_TEXT = 40
+
+
+def _normalize_website(url: str) -> str:
+    url = (url or "").strip()
+    if not url:
+        return ""
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return ""
+    return url
+
+
+def _company_form(request: Request, error: str, **fields):
+    return templates.TemplateResponse(request, "index.html", {"error": error, **fields})
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +64,7 @@ async def run(
     company_name: str = Form(...),
     product_name: str = Form(...),
     company_website: str = Form(""),
-    value_props: str = Form(...),
+    value_props: str = Form(""),
     icp_description: str = Form(...),
     # Mode: "autopilot", "agent", or "bulk"
     mode: str = Form(...),
@@ -57,10 +79,45 @@ async def run(
     prospect_industry: list[str] = Form(default=[]),
     prospect_website: list[str] = Form(default=[]),
 ):
+    form_fields = {
+        "company_name": company_name,
+        "product_name": product_name,
+        "company_website": company_website,
+        "value_props": value_props,
+        "icp_description": icp_description,
+    }
+
+    website = _normalize_website(company_website)
+    if not website:
+        return _company_form(
+            request,
+            "Company website is required. We use it to learn what your product does.",
+            **form_fields,
+        )
+    form_fields["company_website"] = website
+
+    value_props = value_props.strip()
+    if not value_props:
+        try:
+            value_props = (await asyncio.to_thread(scrape_homepage, website)).strip()
+        except Exception:
+            return _company_form(
+                request,
+                "We couldn't read that website. Add a short description of what your product does, or try another URL.",
+                **form_fields,
+            )
+        if len(value_props) < MIN_PRODUCT_TEXT:
+            return _company_form(
+                request,
+                "That website didn't include enough text about your product. Add a short description of what it does.",
+                **form_fields,
+            )
+        form_fields["value_props"] = value_props
+
     ctx = CompanyContext(
         name=company_name,
         product=product_name,
-        website=company_website,
+        website=website,
         value_props=value_props,
         icp_description=icp_description,
     )
@@ -100,9 +157,11 @@ async def run(
             ))
 
     if not prospects:
-        return templates.TemplateResponse(request, "index.html", {
-            "error": "No prospects found. Please upload a CSV or add at least one prospect manually.",
-        })
+        return _company_form(
+            request,
+            "No prospects found. Please upload a CSV or add at least one prospect manually.",
+            **form_fields,
+        )
 
     # Run the selected pipeline
     results: list[OutreachResult] = []

@@ -88,24 +88,25 @@
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Company name <span class="text-red-500">*</span></label>
-        <input type="text" name="company_name" required placeholder="e.g. LogicGate"
+        <input type="text" name="company_name" required value="{{ company_name or '' }}" placeholder="e.g. LogicGate"
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Product name <span class="text-red-500">*</span></label>
-        <input type="text" name="product_name" required placeholder="e.g. Risk Cloud"
+        <input type="text" name="product_name" required value="{{ product_name or '' }}" placeholder="e.g. Risk Cloud"
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
       </div>
       <div class="sm:col-span-2">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Company website</label>
-        <input type="url" name="company_website" placeholder="https://logicgate.com"
+        <label class="block text-sm font-medium text-gray-700 mb-1">Company website <span class="text-red-500">*</span></label>
+        <input type="url" name="company_website" required value="{{ company_website or '' }}" placeholder="https://logicgate.com"
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
+        <p class="mt-1 text-xs text-gray-400">Required. If you leave the product description blank, we read this page and use it.</p>
       </div>
       <div class="sm:col-span-2">
-        <label class="block text-sm font-medium text-gray-700 mb-1">What your product does <span class="text-red-500">*</span></label>
-        <textarea name="value_props" required rows="3"
-          placeholder="e.g. A no-code GRC platform that helps regulated industries manage risk, compliance, and audit programs in one connected system. Pre-built control frameworks for SOC 2, FFIEC, NIST CSF. Automated evidence collection. No custom code required."
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none"></textarea>
+        <label class="block text-sm font-medium text-gray-700 mb-1">What your product does</label>
+        <textarea name="value_props" rows="3"
+          placeholder="Optional. Leave this blank and we'll pull it from your company website."
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none">{{ value_props or '' }}</textarea>
       </div>
       <div class="sm:col-span-2">
         <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -113,7 +114,7 @@
         </label>
         <textarea name="icp_description" required rows="3"
           placeholder="e.g. CISOs, Chief Risk Officers, and VP Compliance at financial services or healthcare companies with 200–5000 employees. Must operate in a regulated industry with compliance obligations (SOC 2, FFIEC, HIPAA). Currently managing GRC in spreadsheets or disconnected point tools."
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none"></textarea>
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none">{{ icp_description or '' }}</textarea>
       </div>
     </div>
   </div>

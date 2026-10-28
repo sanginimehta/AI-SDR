@@ -6,7 +6,19 @@ Columns are chosen to map cleanly into HubSpot, Salesforce, or Pipedrive.
 import csv
 import io
 import re
+from urllib.parse import quote
+
 from .models import OutreachResult
+
+# Shared with both email generators so bulk and agent runs sound the same.
+EMAIL_VOICE = """Write the way a person writes a short email, not the way a template does.
+- Use contractions (I'm, you're, it's, don't).
+- Mostly short sentences. One longer sentence is fine when it says something specific.
+- No em dashes, en dashes, or double hyphens (--). Use a period or a comma.
+- No bullets, headers, or bold.
+- Do not use "I hope this finds you well", "just bumping this", "leverage", "synergy", "circle back", or "excited to".
+- Mention one real detail, then stop.
+"""
 
 
 def parse_email(raw: str) -> tuple[str, str]:
@@ -39,7 +51,35 @@ def parse_email(raw: str) -> tuple[str, str]:
                 break
 
     body = "\n".join(body_lines).strip()
-    return subject, body
+    return humanize_prose(subject), humanize_prose(body)
+
+
+def humanize_prose(text: str) -> str:
+    """Drop markdown and dash punctuation so the email reads like it was typed."""
+    lines = [_humanize_line(line) for line in text.splitlines()]
+    cleaned = "\n".join(lines)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _humanize_line(line: str) -> str:
+    if re.fullmatch(r"\s*-{2,}\s*", line):
+        return ""
+    line = line.replace("**", "")
+    line = re.sub(r"\s*(?:—|–|--)\s*", ", ", line)
+    line = re.sub(r"\s+,", ",", line)
+    line = re.sub(r",(?:\s*,)+", ",", line)
+    line = re.sub(r",\s*([.!?])", r"\1", line)
+    line = re.sub(r" {2,}", " ", line)
+    line = re.sub(r"^,\s*", "", line)
+    return line.rstrip()
+
+
+def build_mailto(subject: str, body: str, to: str = "") -> str:
+    """Open the default mail app with the subject and body already filled in."""
+    body = body.replace("\r\n", "\n").replace("\r", "\n")
+    body_q = quote(body).replace("%0A", "%0D%0A")
+    return f"mailto:{quote(to)}?subject={quote(subject)}&body={body_q}"
 
 
 def results_to_csv(results: list[OutreachResult]) -> str:
@@ -122,6 +162,7 @@ def result_to_dict(r: OutreachResult) -> dict:
         "score_rationale":   s.rationale if s else "",
         "email_subject":     r.email_subject,
         "email_body":        r.email_body,
+        "mailto":            build_mailto(r.email_subject, r.email_body) if (r.email_subject or r.email_body) else "",
         "date_generated":    r.date_generated,
         "error":             r.error,
     }

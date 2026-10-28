@@ -7,8 +7,8 @@ class CompanyContext:
     """Everything about the company doing the outreach — drives all prompts."""
     name: str            # "LogicGate"
     product: str         # "Risk Cloud"
-    website: str         # "logicgate.com"
-    value_props: str     # free-form: what the product does and who it helps
+    website: str         # required — scraped when value_props is left blank
+    value_props: str     # optional — filled from the company website when empty
     icp_description: str # free-form: ideal customer profile
 
 
