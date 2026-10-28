@@ -14,7 +14,7 @@ from claude_agent_sdk import (
 )
 
 from .models import CompanyContext, Prospect, LeadScore
-from .output import parse_email
+from .output import EMAIL_VOICE, parse_email
 
 SCORE_THRESHOLD = 6
 
@@ -205,8 +205,10 @@ Email guidelines:
 - Subject line + 3 short paragraphs, under 150 words total
 - Paragraph 1: personalized opener referencing something specific and current
 - Paragraph 2: connect their pain points to what {ctx.product} solves
-- Paragraph 3: low-pressure CTA — 20-minute call or relevant resource
+- Paragraph 3: low-pressure ask, a 20-minute call or a relevant resource
 - Tone: peer-to-peer, direct, no fluff
+
+{EMAIL_VOICE}
 """
 
     if not is_followup:
