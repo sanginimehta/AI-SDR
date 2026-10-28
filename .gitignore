@@ -3,6 +3,8 @@
 
 # generated outputs
 prospect_memory/
+output.csv
+agent_output.csv
 
 
 # python
